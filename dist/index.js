@@ -2519,39 +2519,6 @@
     mergeConfig: mergeConfig2
   } = axios_default;
 
-  // src/framework/ApiSync.ts
-  var ApiSync = class {
-    constructor(url2) {
-      this.url = url2;
-    }
-    fetch(id) {
-      return axios_default.get(`${this.url}/${id}`);
-    }
-    save(data) {
-      const { id } = data;
-      if (id) {
-        return axios_default.put(`${this.url}/${id}`, data);
-      }
-      return axios_default.post(`${this.url}`, data);
-    }
-  };
-
-  // src/framework/Attributes.ts
-  var Attributes = class {
-    constructor(data) {
-      this.data = data;
-      this.get = (key) => {
-        return this.data[key];
-      };
-    }
-    set(update) {
-      Object.assign(this.data, update);
-    }
-    getAllProps() {
-      return this.data;
-    }
-  };
-
   // src/framework/Eventing.ts
   var Eventing = class {
     constructor() {
@@ -2589,6 +2556,39 @@
         });
         this.trigger("change");
       });
+    }
+  };
+
+  // src/framework/ApiSync.ts
+  var ApiSync = class {
+    constructor(url2) {
+      this.url = url2;
+    }
+    fetch(id) {
+      return axios_default.get(`${this.url}/${id}`);
+    }
+    save(data) {
+      const { id } = data;
+      if (id) {
+        return axios_default.put(`${this.url}/${id}`, data);
+      }
+      return axios_default.post(`${this.url}`, data);
+    }
+  };
+
+  // src/framework/Attributes.ts
+  var Attributes = class {
+    constructor(data) {
+      this.data = data;
+      this.get = (key) => {
+        return this.data[key];
+      };
+    }
+    set(update) {
+      Object.assign(this.data, update);
+    }
+    getAllProps() {
+      return this.data;
     }
   };
 
@@ -2728,6 +2728,48 @@
     }
   };
 
+  // src/user/UserList.ts
+  var UserList = class extends View {
+    constructor() {
+      super(...arguments);
+      this.selectedUserId = "";
+      this.onUserChange = () => {
+        const selectElement = this.parent.querySelector(".user-select");
+        this.selectedUserId = selectElement.value;
+        const selectedUser = this.userCollection.models.find((user) => user.get("id") === this.selectedUserId);
+        if (selectedUser) {
+          this.onUserSelect(selectedUser);
+        }
+      };
+    }
+    initialize(userCollection2, onUserSelect) {
+      this.userCollection = userCollection2;
+      this.onUserSelect = onUserSelect;
+      this.userCollection.fetch();
+      this.model.save();
+    }
+    template() {
+      return `
+            <div>
+                <div>User List:</div>
+                <select class="user-select">
+                    ${this.renderOptions()}
+                </select>
+            </div>
+        `;
+    }
+    renderOptions() {
+      return this.userCollection.models.map((user) => {
+        return `<option value="${this.model.get("id")}">${this.model.get("name")}</option>`;
+      }).join("");
+    }
+    eventsMap() {
+      return {
+        "change:.user-select": this.onUserChange
+      };
+    }
+  };
+
   // src/user/UserShow.ts
   var UserShow = class extends View {
     template() {
@@ -2742,8 +2784,19 @@
 
   // src/user/UserEdit.ts
   var UserEdit = class extends View {
+    constructor() {
+      super(...arguments);
+      this.onUserSelect = (user) => {
+        const idUser = user.get("id");
+        if (idUser) {
+          this.model.set({ "id": idUser });
+          new UserShow(this.regions.userShow, this.model).render();
+        }
+      };
+    }
     regionsMap() {
       return {
+        userList: ".user-list",
         userShow: ".user-show",
         userForm: ".user-form"
       };
@@ -2751,12 +2804,20 @@
     template() {
       return `
         <div>
+            <div class="user-list"></div>
             <div class="user-show"></div>
             <div class="user-form"></div>
         </div>
         `;
     }
     onRender() {
+      const userCollection2 = new Collection(
+        "http://localhost:3001/users",
+        (json) => User.build(json)
+      );
+      const userList = new UserList(this.regions.userList, this.model);
+      userList.initialize(userCollection2, this.onUserSelect);
+      userList.render();
       new UserShow(this.regions.userShow, this.model).render();
       new UserForm(this.regions.userForm, this.model).render();
     }
@@ -2765,9 +2826,14 @@
   // src/index.ts
   var rootElement = document.getElementById("root");
   var john = User.build({ name: "JOHN", age: 20 });
+  var userCollection = new Collection(
+    "http://localhost:3001/users",
+    (json) => User.build(json)
+  );
+  userCollection.fetch();
+  console.log(userCollection.models);
   if (rootElement) {
     const userEdit = new UserEdit(rootElement, john);
     userEdit.render();
-    console.log(userEdit);
   }
 })();
